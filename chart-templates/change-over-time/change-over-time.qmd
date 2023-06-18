@@ -1,0 +1,42 @@
+---
+title: "Change over time"
+author: "Yusuf Imaad Khan"
+format: html
+editor: visual
+code-fold: true
+code-tools: true
+self-contained: true
+toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Line
+
+## Column
+
+## Column + line timeline
+
+## Slope
+
+## Area chart
+
+## Candlestick
+
+## Fan chart (projections)
+
+## Connected scatterplot
+
+## Calendar heatmap
+
+## Priestley timeline
+
+## Circle timeline
+
+## Vertical timeline
+
+## Seismogram
+
+## Streamgraph

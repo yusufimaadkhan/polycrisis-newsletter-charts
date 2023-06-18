@@ -1,0 +1,23 @@
+---
+title: "Deviation"
+author: "Yusuf Imaad Khan"
+format: html
+editor: visual
+code-fold: true
+code-tools: true
+self-contained: true
+toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Diverging bar
+
+## Diverging stacked bar
+
+## Spine
+
+## Surplus/deficit filled line
+
