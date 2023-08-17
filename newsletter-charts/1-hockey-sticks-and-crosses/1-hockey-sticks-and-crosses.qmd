@@ -1,0 +1,1554 @@
+---
+title: "Hockey sticks and crosses"
+author: "Yusuf Imaad Khan"
+format: html
+editor: visual
+backgroundcolor: "#e5e8de"
+execute:
+  echo: false
+  warning: false
+  message: false
+  #cache: true # be careful with this one
+code-tools: true
+toc: true
+number-sections: true
+toc-depth: 1
+number-depth: 1
+self-contained: true # deprecated in later version 
+quarto:
+  dependencies:
+    - html2canvas@^1.3.2
+---
+
+```{r}
+
+# This Quarto doc contains all the code for the charts in Anthea Roberts and Nicolas Lamp's piece on hockey sticks and crosses in The Polycrisis newsletter - https://www.phenomenalworld.org/series/the-polycrisis/
+
+# If you work through bits of:
+
+## This guide to understand how a qmd file works - https://quarto.org/docs/guide/
+## This for all the R cleaning/wrangling - https://r4ds.hadley.nz/
+## This documentation for Observable Plot - https://observablehq.com/plot/
+
+# You should be able to get a sense of whats happening here, and make even better things for your own use.
+# Much of this is inspired by John Burn-Murdoch's work - e.g. https://www.ft.com/content/b2154c20-c9d0-4209-9a47-95d114d31f2b
+
+# Here are the steps:
+
+# 1. Clean and wrangle the data (the most involved part is for chart 3)
+
+# 2. Transfer data to an object that Observable Plot can work with
+
+# 3. Make charts with Observable Plot + smidges of D3 (I couldn't bring myself to write this all in D3. I am not the FT and I need sleep)
+
+# 4. But here is the trick - all the titles and captions are markdown in a div that is outside the OJS chunk (its a bit like a sandwich. The benefit of this is that you can use anything to make the charts e.g. R/Julia/Python/Observable, but your title/caption/div styling can remain the same). I think its like the FT chart frame but better (ok probably not...except for accommodating multiple languages). I think this is cool. But maybe its silly
+
+# 5. Because each sandwich chart sits in a div, you just write (ahem chatGPT/co-pilot writes) a bit of javascript to export it to a PNG 
+
+# 6. So...cleaning, high quality charts, and exports all in one doc...that for now is shareable as a self-contained HTML doc (but this doesn't work in the latest version of Quarto because of Observable dependencies!)
+
+# Reflections: 
+## This is quick in some ways and slow in others. 
+## I'll reflect on my workflow and think about what to change. 
+## I did experiment with a button for exporting to mobile sized PNG, but this is a first run. 
+## Please excuse my code indentation. I think the multiple languages thing doesn't play well with that, but I'm sure there is something to fix it across the chunks. Even so...the code serves a purpose...and it seems to work. Perhaps I'll move over to just working in the browser. 
+## A cool shortcut is that the chart styling piggybacks off the Quarto SCSS! (I think - at least for fonts and line-heights). I've left it at the default for now. 
+## A suggestion might be to put this all in a quarto project. You could also stop rewriting the YAML every time and put it in base of directory!
+
+# A tip for measuring things to the pixel - https://learn.microsoft.com/en-us/windows/powertoys/screen-ruler. Many thanks to Alex Ralphs for this suggestion among others, and to many others for their help. (Now I feel the need to name everybody who has helped me out with this. But I don't have their permission to disclose identity. I'll leave it for now. I will say - thank you everybody who I bugged about charts!). And of course - a huge thanks to the Observable community who I now need to give back to and stop lurking/taking good ideas from, and offering nothing back!
+
+# Load packages ----
+
+# keep it light. Switch to base pipe? Maybe use groundhog? renv too involved? 
+
+library(tidyverse)
+library(readr)
+library(readxl)
+library(janitor)
+
+```
+
+```{r}
+
+# Data cleaning/wrangling ----
+
+# The cleaning for chart 3 was in a separate R script, but I've put it in here for now. Also the charts were iterated on in browser -> put in here as functions -> adjusted for styling. I'm sure there is a better way. Maybe I just use Observable. But that comes with downsides like not being able to use R in same doc + use my sandwich trick + export as HTML doc (in old version of Quarto) + etc. 
+
+## Chart 1 - hockey stick of prosperity ----
+## SOURCE - https://ourworldindata.org/grapher/world-gdp-over-the-last-two-millennia
+
+world_gdp_2_millenia <- read_csv("world-gdp-over-the-last-two-millennia.csv")
+
+## Chart 2 - hockey stick of doom ----
+## SOURCE  - https://ourworldindata.org/grapher/cumulative-co2-emissions-region?stackMode=absolute
+
+## The colour choices and factor ordering decisions of OWID are very interesting. Perhaps its an automatic decision. Or perhaps its IDEOLOGICAL. I mean really. China appears most prominent because of the colour choice. When really the US and Europe lead in cumulative emissions. I should have disaggregated for the UK too. They come to about 4.6% of the cumulative emissions share. More than India/NA/Africa. 
+
+cumulative_co2_emissions_region <- read_csv("cumulative-co2-emissions-region.csv") %>% 
+  clean_names() %>% 
+  filter(entity %in% c("China", "India", "Africa", "Oceania", "South America", "North America (excl. USA)", "United States", "European Union (27)", "Europe (excl. EU-27)", "Asia (excl. China and India)" )) %>% # Same categories as OWID - not transport
+  arrange(factor(entity, levels=c(
+                      "United States",
+                      "European Union (27)",
+                      "Asia (excl. China and India)",
+                      "China",
+                      "Europe (excl. EU-27)",
+                      "North America (excl. USA)",
+                      "India",
+                      "Africa",
+                      "South America",
+                      "Oceania"
+                      )))
+
+  cumulative_bar <- cumulative_co2_emissions_region %>% 
+  filter(year==2021) %>% # keep final year to calculate cumulative shares
+  mutate(total_cumulative = sum(cumulative_co2_emissions_zero_filled), 
+         percent = cumulative_co2_emissions_zero_filled/(total_cumulative)) %>% 
+  select(entity, percent) %>% 
+  mutate(bar = "bar",
+         labels = if_else(!entity%in%c("Oceania", "South America"),1,2)) # label because I need to adjust these positions slightly
+
+## Chart 3 - doom and prosperity - BIG ----
+
+## SOURCE http://www.igbp.net/news/pressreleases/pressreleases/planetarydashboardshowsgreataccelerationinhumanactivitysince1950.5.950c2fa1495db7081eb42.html or https://journals-sagepub-com.gate3.library.lse.ac.uk/doi/10.1177/2053019614564785 - https://openresearch-repository.anu.edu.au/bitstream/1885/66463/8/01_Steffen_GREAT%20ACCELERATION_2015.pdf OPEN ACCESS
+
+# The cleaning code for this one was sitting in another R script - but I'll leave it here for simplicity/self-contained reasons. Maybe that isn't advisable given length of the code
+
+# The great acceleration data is sitting in an excel spreadsheet. Each of the 24 indicators is in a separate tab. You just need to get all that data from every tab between the years of 1750 and 2010, fix any anomalies, stitch it all together, and make a chart. You Khan do it :'-)
+
+# First write a function to get all data from the excel sheets
+
+get_data_from_all_sheets <- function(file_path) {
+  sheets <- readxl::excel_sheets(file_path)
+  data <- list()
+  
+  for (sheet_name in sheets) {
+    sheet_data <- readxl::read_excel(file_path, sheet = sheet_name)
+    data[[sheet_name]] <- sheet_data
+  }
+  
+  return(data)
+}
+
+sheet_data <- get_data_from_all_sheets("igbp_great_acceleration_data_collection.xlsx")
+
+sheet_data <- sheet_data[!names(sheet_data) %in% c("Read me")]
+
+# Fix the var name row - should have one column in it that contains "Year"
+
+fixed_list <- lapply(sheet_data, function(tibble) {
+  year_row <- which(apply(tibble, 1, function(row) any(grepl("Year", row, ignore.case = FALSE))))
+  
+  if (length(year_row) > 0) {
+    col_names <- as.character(tibble[year_row[1], ])
+    tibble <- tibble[-year_row, ]
+    names(tibble) <- col_names
+  }
+  
+  return(tibble)
+})
+
+# Get rid of empty vars
+
+fixed_list <- lapply(fixed_list, function(tibble) {
+  tibble <- tibble[, colSums(is.na(tibble)) < nrow(tibble)]
+  tibble <- tibble[, colnames(tibble) != "" & !is.na(colnames(tibble))]
+  return(tibble)
+})
+
+# Get rid of NAs
+
+fixed_list <- lapply(fixed_list, na.omit)
+
+# Rename any slightly different year columns so we can join it all up
+
+fixed_list <- map(fixed_list, ~ {
+  .x %>%
+    rename_with(~ if_else(. %in% c("Year AD"), "Year", .), .cols = everything())
+})
+
+# Remove redundant vars
+
+fixed_list <- map(fixed_list, ~ select(.x, -one_of(c("OECD", "BRICS", "Rest", "OEDC", "OECD accumulative", "BRICS accumulative", "Rest  accumulative")))) ## rest accumalative - 2 spaces
+
+
+# Add list element name to each var except year so we can discern what each var is referring to
+
+fixed_list <- imap(fixed_list, ~ {
+  var_names <- names(.x)
+  year_var <- var_names[var_names == "Year"]
+  other_vars <- var_names[var_names != "Year"]
+  other_vars_new <- paste0(.y, "_", other_vars)
+  names(.x) <- c(year_var, other_vars_new)
+  .x
+})
+
+# Join everything in the nested list together, put it in long format, and then classify trend type for facet
+
+igbp_combined_df <- reduce(fixed_list, full_join, by = "Year") %>% 
+  clean_names() %>% 
+  pivot_longer(2:25, names_to = "indicator", values_to = "values") %>% 
+  mutate(trend_type = if_else(indicator%in%c(
+    "x1_population_world",                                                 
+    "x2_real_gdp_world",                                                   
+    "x3_fdi_world",                                                        
+    "x4_urban_population_world",                                           
+    "x5_primary_energy_use_exajoule_ej",                                   
+    "x6_fertilizer_consumption_world_incl_historic",                       
+    "x7_large_dams_world_accumulative",                                    
+    "x8_water_use_world",                                                  
+    "x9_paper_production_world",                                           
+    "x10_transportation_world",                                            
+    "x11_telecommunications_world",                                        
+    "x12_international_tourism_world"                                     
+  ), "Socio-economic Trends", "Earth System Trends"
+  )) %>% 
+  filter(!year>2010,
+         !year<1750) %>% 
+  mutate(values = as.numeric(values)) %>% 
+  filter(!is.na(values)) %>% 
+  arrange(year) %>% 
+  # sort out the levels
+  arrange(factor(indicator, levels=c( 
+ "x1_population_world",                                                 
+ "x2_real_gdp_world",                                                   
+ "x3_fdi_world" ,                                                       
+ "x4_urban_population_world"  ,                                         
+ "x5_primary_energy_use_exajoule_ej"  ,                                 
+ "x6_fertilizer_consumption_world_incl_historic" ,                      
+ "x7_large_dams_world_accumulative",                    
+ "x8_water_use_world",                   
+ "x9_paper_production_world",                  
+ "x10_transportation_world",                 
+ "x11_telecommunications_world",                
+ "x12_international_tourism_world",               
+ "x1_carbon_dioxide_carbon_dioxide_ppm",              
+ "x2_nitrous_oxide_nitrous_oxide_ppb",             
+ "x3_methane_methane_ppb",            
+ "x4_ozone_ozone_percent_loss",           
+ "x5_temperature_temperature_anomaly_deg_c",          
+ "x6_ocean_acidification_mean_hydrogen_ion_concentraion_h_nmol_kg",     
+ "x7_marine_fish_marine_fish_capture_million_tonnes",    
+ "x8_shrimp_aqu_shrimp_aquaculture_million_tonnes",   
+ "x9_nitrogen_nitrogen_flux_mtons_yr_1",  
+ "x10_tropical_forest_tropical_forset_loss_percent", 
+ "x11_dom_land_domesticated_land_percent",
+ "x12_terrestrial_biosph_degradati_percent_decr_mean_species_abundance"
+                      ))) %>% 
+  filter(!values==0,
+  ## edit x4 ozone for 1962 - this year keeps extending the y axis very far because there is a single negative value for ozone loss. I need to be careful here. I HAVE MADE A JUDGMENT HERE TO OMIT THIS VALUE FROM THE DATASET - IT IS AN ANALYTICAL CHOICE BASED ON ME THINKING THAT THE READER SHOULD BE ABLE TO VIEW THE GENERAL TRENDS WITH THE MAXIMUM CLARITY POSSIBLE. LET THIS BE KNOWN. 
+  !(year == "1962" & indicator == "x4_ozone_ozone_percent_loss" & values<0)) %>% 
+  mutate(year = as.numeric(year),
+         year = ceiling(year),
+  labels = case_match(indicator,
+ "x1_population_world"~"World Population",                                                 
+ "x2_real_gdp_world"~"Real GDP",                                                   
+ "x3_fdi_world"~"Foreign Direct Investment",                                                       
+ "x4_urban_population_world"~"Urban Population",                                         
+ "x5_primary_energy_use_exajoule_ej"~"Primary Energy Use",                                 
+ "x6_fertilizer_consumption_world_incl_historic"~"Fertilizer Consumption",                      
+ "x7_large_dams_world_accumulative"~"Large Dams",                    
+ "x8_water_use_world"~"Water Use",                   
+ "x9_paper_production_world"~"Paper Production",                  
+ "x10_transportation_world"~"Transportation",                 
+ "x11_telecommunications_world"~"Tele- communications",                
+ "x12_international_tourism_world"~"International Tourism",               
+ "x1_carbon_dioxide_carbon_dioxide_ppm"~"Carbon Dioxide",              
+ "x2_nitrous_oxide_nitrous_oxide_ppb"~"Nitrous Oxide",             
+ "x3_methane_methane_ppb"~"Methane",            
+ "x4_ozone_ozone_percent_loss"~"Stratospheric Ozone",           
+ "x5_temperature_temperature_anomaly_deg_c"~"Surface Temperature",          
+ "x6_ocean_acidification_mean_hydrogen_ion_concentraion_h_nmol_kg"~"Ocean Acidification",     
+ "x7_marine_fish_marine_fish_capture_million_tonnes"~"Marine Fish Capture",    
+ "x8_shrimp_aqu_shrimp_aquaculture_million_tonnes"~"Shrimp Aquaculture",   
+ "x9_nitrogen_nitrogen_flux_mtons_yr_1"~"Coastal Nitrogen",  
+ "x10_tropical_forest_tropical_forset_loss_percent"~"Tropical Forest Loss", 
+ "x11_dom_land_domesticated_land_percent"~"Domesticated Land",
+ "x12_terrestrial_biosph_degradati_percent_decr_mean_species_abundance"~"Terrestrial Biosphere Degradation",
+ .default = indicator),
+ # write up the labels - FT style for millions/billions - https://aboutus.ft.com/press_release/ft-makes-change-to-style-guide
+ yAxisLabels = case_match(indicator,
+ "x1_population_world"~"bn",                                                 
+ "x2_real_gdp_world"~"tn US$",                                                   
+ "x3_fdi_world"~"tn US$",                                                       
+ "x4_urban_population_world"~"bn",                                         
+ "x5_primary_energy_use_exajoule_ej"~"Exajoule - EJ",                                 
+ "x6_fertilizer_consumption_world_incl_historic"~"mn tonnes",                      
+ "x7_large_dams_world_accumulative"~"k dams",                    
+ "x8_water_use_world"~"k km³",                   
+ "x9_paper_production_world"~"mn tonnes",                  
+ "x10_transportation_world"~"mn motor vehicles",                 
+ "x11_telecommunications_world"~"bn phone subscriptions",                
+ "x12_international_tourism_world"~"mn arrivals",               
+ "x1_carbon_dioxide_carbon_dioxide_ppm"~"atmos. conc. ppm",              
+ "x2_nitrous_oxide_nitrous_oxide_ppb"~"atmos. conc. ppb",             
+ "x3_methane_methane_ppb"~"atmos. conc. ppb",            
+ "x4_ozone_ozone_percent_loss"~"% loss",           
+ "x5_temperature_temperature_anomaly_deg_c"~"temp. anomaly °C",          
+ "x6_ocean_acidification_mean_hydrogen_ion_concentraion_h_nmol_kg"~"hydrogen ion, nmol kg⁻¹",     
+ "x7_marine_fish_marine_fish_capture_million_tonnes"~"mn tonnes",    
+ "x8_shrimp_aqu_shrimp_aquaculture_million_tonnes"~"mn tonnes",   
+ "x9_nitrogen_nitrogen_flux_mtons_yr_1"~"Human N flux mtons yr⁻¹",  
+ "x10_tropical_forest_tropical_forset_loss_percent"~"% loss area", 
+ "x11_dom_land_domesticated_land_percent"~"% of total land area",
+ "x12_terrestrial_biosph_degradati_percent_decr_mean_species_abundance"~"% dec. mean species abundance",
+ .default = indicator)) %>% 
+  mutate(values = if_else (indicator == "x11_dom_land_domesticated_land_percent", values*100, values)) %>%  # convert to %
+  group_by(indicator) %>% 
+  mutate(min = if_else (indicator == "x5_temperature_temperature_anomaly_deg_c", min(values) - 0.1, NA)) %>% # this is to consistently shade values under the line for surface temp facet + leave a little room underneath so the line isn't flush with bottom of multiple. Observable plot area mark defaults to shading within constraint of y = 0, but also offers y1 + y2 values
+  ungroup() %>% 
+  mutate(values_temp = values,
+         values_all_else = if_else (indicator == "x5_temperature_temperature_anomaly_deg_c", NA, values)) # for the conditional bit of code that will fix differences between surface temp and other small multiples
+  
+  
+write.csv(igbp_combined_df, "igbp_combined_df.csv", row.names=FALSE)
+
+# have a little cry ----
+
+
+## Chart 4 - hope ----
+
+## SOURCE - https://ourworldindata.org/grapher/installed-solar-PV-capacity + modelled values from solar power europe. I believe Simon Evans put these together. Link below
+
+installed_solar_PV_cap <- read_csv("installed-solar-PV-capacity.csv") %>% 
+  clean_names() %>% 
+  filter(entity=="World") %>% 
+  select(-code) %>% 
+  mutate(projected = "Actual", 
+         year = year + 1)  
+
+# create projected rows - sourced from https://www.linkedin.com/posts/simon-evans-53091614_it-took-22yrs-for-global-solar-power-activity-7074407505132445696-orvS and https://www.solarpowereurope.org/insights/market-outlooks/global-market-outlook-for-solar-power-2023-2027-1#downloadForm
+  
+projected_rows <- data.frame(
+  entity = c("World","World","World","World","World","World"),
+  year = c(2023, 2024, 2025, 2026, 2027, 2028),
+  solar_capacity = c(1177, 1518, 1919, 2381, 2915, 3532), # see page 33 from report for hardcoded values
+  projected = c("Projected","Projected","Projected","Projected","Projected","Projected"),
+  stringsAsFactors = FALSE
+) 
+
+installed_solar_PV_cap <- installed_solar_PV_cap %>% 
+  bind_rows(projected_rows)%>% 
+  filter(year>=2000)
+
+## Chart 5 - income ----
+
+## SOURCE - https://wid.world/
+
+## Used excel spreadsheet because WID CSV were throwing errors with semicolon separation
+
+WID_p1vp50_US <- read_excel("WID_Data_20062023-185112.xlsx") %>% 
+  clean_names() %>%  # the variables are especially annoying in this one 
+  filter(year>=1980) %>% 
+  mutate(percentile = case_match(percentile,
+        "p99p100" ~ "Top 1% \nUS",
+        "p0p50" ~ "Bottom 50% \nUS"))
+
+
+## Chart 6 - deindustrialisation ----
+
+## SOURCES - https://ourworldindata.org/structural-transformation-and-deindustrialization-evidence-from-todays-rich-countries
+
+#v1
+
+employment_by_economic_sector <- read_csv("employment-by-economic-sector.csv") %>% 
+clean_names() %>% 
+filter(code=="USA") %>% 
+rename("number_employed_manufacturing"="number_of_people_employed_in_industry_herrendorf_et_al_data",
+       "number_employed_services" = "number_of_people_employed_in_services_herrendorf_et_al_data") %>% 
+mutate(total = number_employed_agri + number_employed_manufacturing + number_employed_services,
+number_employed_agri_man = number_employed_agri + number_employed_manufacturing,
+share_agri_man = number_employed_agri_man/total,
+share_services = number_employed_services/total) %>% 
+select(entity, year, share_agri_man, share_services) %>% 
+pivot_longer(3:4, names_to = "category", values_to = "share") %>% 
+filter(!is.na(share)) %>% 
+mutate(labels = case_match(category,
+ "share_agri_man"~"Agriculture & manufacturing",                                                 
+ "share_services"~"Services",                                                   
+ .default = category))
+
+#v2 - didn't go for GDP one. Went for % share of employment by sector. 
+
+# I freely admit this choice can be questioned w.r. to impact on labour market of population growth/productivity/labour mobility/technological shifts/etc. 
+
+# But I think it suffices to make the point about deindustrialisation. Perhaps reorganising the categories and saying things have flipped on the 80/20 split is a little exaggerated when comparing "agriculture & manufacturing" and "services". Unsure. But I've taken it from OWID, they have a decent source (Herrendorf et al 2014), it appears to be reputable and based on the World Development Indicators.  
+
+# shares_of_gdp_by_economic_sector <- read_csv("shares-of-gdp-by-economic-sector.csv") %>% 
+# clean_names() %>% 
+# filter(code=="USA") %>% 
+# rename("agriculture_share_gdp"="share_of_agriculture_in_gdp_at_current_prices_herrendorf_et_al_data",
+#        "services_share_gdp" = "share_of_services_in_gdp_at_current_prices_herrendorf_et_al_data",
+# "manufacturing_share_gdp"= "share_of_industry_in_gdp_at_current_prices_herrendorf_et_al_data"   
+#        ) %>% 
+# mutate(agri_manuf_share_gdp = manufacturing_share_gdp  + agriculture_share_gdp) %>% 
+# select(entity, year, agri_manuf_share_gdp, services_share_gdp) %>% 
+# pivot_longer(3:4, names_to = "category", values_to = "share") %>% 
+#   mutate(labels = case_match(category,
+#  "agri_manuf_share_gdp"~"Agriculture & manufacturing",                                                 
+#  "services_share_gdp"~"Services",                                                   
+#  .default = category))
+
+
+## Chart 7 - manuf ----
+
+## SOURCE - https://data.worldbank.org/indicator/NV.IND.MANF.ZS
+
+# Didn't end up using this one for a chart. There was some discussion about whether global manufacturing value added was more meaningful for the point being made in the article over share of global GDP PPP (const 2017 int $). But see https://policytensor.substack.com/p/is-the-us-stronger-than-china for a good synthesis
+
+glob_man_val_add <- read_csv("API_NV.IND.MANF.CD_DS2_en_csv_v2_5607267.csv", 
+    skip = 3) %>% 
+  select(-68) %>% 
+  filter(`Country Code`%in%c("USA","CHN","JPN","IND","EUU","WLD")) %>% 
+  pivot_longer(5:67, names_to = "year", values_to = "values") %>% 
+  clean_names() %>% 
+  filter(year>=2004)
+
+world_glob_man <- glob_man_val_add %>% 
+  filter(country_code=="WLD") %>% 
+  select(year, values) %>% 
+  rename(world_values = values)
+
+glob_man_val_add <- glob_man_val_add %>% 
+  left_join(world_glob_man, by="year") %>% 
+  mutate(shares = values/world_values) %>% 
+  filter(!country_code=="WLD") %>% 
+  filter(!year>2021) %>% 
+  mutate(labels = case_match(country_name,
+ #"United States"~"US",                                                 
+ "European Union"~"EU",                                                   
+ .default = country_name)) %>% 
+  filter(country_code%in%c("USA", "CHN")) 
+  
+
+
+## Chart 8 - tax ----
+
+## SOURCE Office of Management and Budget. Historical Tables. Table 2.3 - https://www.whitehouse.gov/omb/budget/historical-tables/
+
+## An alternative I considered -  DataF4 - F + G - https://taxjusticenow.org/appendix. It wasn't the same because of denominator and inclusion/exclusion of payroll benefits (I THINK)
+
+tax_burden_data <- read_excel("hist02z3_fy2024.xlsx", 
+    skip = 1) %>% 
+  clean_names() %>% 
+  select(1:4) %>% 
+  filter(fiscal_year>=1950,
+         !fiscal_year>2022) %>% 
+  mutate(social_insurance_and_retirement_receipts = as.numeric(social_insurance_and_retirement_receipts)) %>% 
+  pivot_longer(2:4, names_to = "categories", values_to = "values") %>% 
+  rename(year = fiscal_year) %>% 
+  filter(!categories=="individual_income_taxes") %>% 
+  mutate(labels = case_match(categories,
+ "corporation_income_taxes"~"Corporate income taxes",                                                 
+ "social_insurance_and_retirement_receipts"~"Payroll taxes",                                                   
+ .default = categories))
+
+## Chart 9 - GDP Additional chart ----
+
+## SOURCE https://data.worldbank.org/indicator/NY.GDP.MKTP.PP.KD
+
+## This is China and US as GDP PPP constant 2017 int $ as a share of world DP PPP constant 2017 int $
+
+gdp <- read_csv("API_NY.GDP.MKTP.PP.KD_DS2_en_csv_v2_5734689.csv", 
+    skip = 3) %>% 
+  select(1, 2, 5:68) %>% 
+  filter(`Country Code`%in%c("WLD", "CHN", "USA")) %>% 
+  select(1, 2, 33:65) %>% 
+  pivot_longer(3:35, names_to = "year", values_to = "gdp_ppp_2017_int_$")
+
+gdp_world <- gdp %>% 
+  filter(`Country Code`=="WLD") %>% 
+  rename("world_amount"="gdp_ppp_2017_int_$") %>% 
+  select(-`Country Code`, -`Country Name`)
+
+df_chn_usa <- gdp %>% 
+  filter(`Country Code`%in%c("CHN", "USA")) %>% 
+  left_join(gdp_world,by="year") %>% 
+  mutate(share=`gdp_ppp_2017_int_$`/world_amount) %>% 
+  clean_names()
+
+```
+
+```{r}
+#| cache: false
+
+# convert to observable ----
+
+# Chart 1
+ojs_define(world_gdp_2_millenia_convert = world_gdp_2_millenia)
+
+# Chart 2 - these will be stuck together and the bar will be aligned inset
+ojs_define(cumulative_co2_emissions_region_convert = cumulative_co2_emissions_region)
+
+ojs_define(cumulative_bar_convert = cumulative_bar)
+
+# Chart 3 (massive one)
+ojs_define(igbp_combined_df_convert = igbp_combined_df)
+
+# Chart 4
+ojs_define(installed_solar_PV_cap_convert = installed_solar_PV_cap)
+
+# Chart 5
+ojs_define(WID_p1vp50_US_convert = WID_p1vp50_US)
+
+# Chart 6 v1
+
+ojs_define(employment_by_economic_sector_convert = employment_by_economic_sector)
+
+# Chart 6 v2 - didn't use it
+
+#ojs_define(shares_of_gdp_by_economic_sector_convert = shares_of_gdp_by_economic_sector)
+
+# Chart 7
+ojs_define(glob_man_val_add_convert = glob_man_val_add)
+
+# Chart 8
+ojs_define(tax_burden_data_convert = tax_burden_data)
+
+# Chart 9
+ojs_define(df_chn_usa_convert = df_chn_usa)
+
+```
+
+# Establishment narrative: prosperity
+
+::: {#chart1 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of global [**prosperity**]{style="color: #3f6bee;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+World GDP over the last two millenia\*
+:::
+
+```{ojs}
+
+// How to read chart code 
+// - Outside of fences/chunks -> markdown that deals with div size, titles, captions, and background colours
+// - Inside - transpose data - parse time variable - write a function in plot (so you can reuse later) - fill in with the specifics
+// - Final step for chart after function - style it and sort ticks/grids
+
+// Transpose
+data1 = transpose(world_gdp_2_millenia_convert);
+
+//Parse time
+parseTime = d3.utcParse("%Y");
+
+/*
+  some common formatting parsers....
+  '%m/%d/%Y'        01/28/1986
+  '%d-%b-%y'        28-Jan-86
+  '%Y %b'           1986 Jan
+  '%Y-%m-%d'        1986-01-28
+  '%B %d'           January 28
+  '%d %b'           28 Jan
+  '%H:%M'           11:39
+  '%H:%M %p'        11:39 AM
+  '%d/%m/%Y %H:%M'  28/01/2016 11:39
+*/
+
+// Plot function - start with rough function and then add custom styling
+
+lineY = (data, {color, fillOpacity = 0.1, ...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, Plot.windowY({stroke: color,strokeWidth: 1.5,...options}))
+  );
+}
+
+lineY(data1, {x: "Year", y:"World GDP in 2011 Int.$ (OWID based on World Bank & Maddison (2017))" , color: "#3f6bee", marker: "dot", k:1}).plot({
+
+
+
+// Custom styling
+
+marginBottom: 40,
+marginLeft: 105,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: false,
+ticks: [1, 500, 1000, 1500, 2015],
+tickPadding: 10,
+tickFormat: (d) => d,
+},
+
+y: {
+label: null, 
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+transform: (d) => d / 1e12, // transform scale 
+tickFormat: (d) => (d === 0 ? `$${d}` : `$${d} trillion`), 
+},
+
+color: {
+legend: false,
+range: ["#3f6bee"]
+}
+
+});
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570; background-color: #e5e8de; line-height: 1.65;"}
+\*Inflation adjusted and international-\$ (2011 prices) <br> **Sources:** Our World In Data based on World Bank & Maddison (2017) <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart1', 15)">Export as PNG</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js"></script>
+
+<!-- use relative file path -->
+
+<script src="../functions/exportAsPNGv2.js"></script>
+```
+# Anthropocene narrative: doom
+
+::: {#chart2 style="width: 750px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of [**doom**]{style="color: #e61f00;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: -0.5rem;"}
+Cumulative carbon dioxide (CO₂) emissions\* by region. Total shares shown inset.
+:::
+
+```{ojs}
+
+import {voronoiCentroids} from "@fil/plot-voronoi-labels"; // Credit to Fil for implementing voronoi in plot
+
+// Transpose
+data2 = transpose(cumulative_co2_emissions_region_convert);
+
+date2edit = data2 // have to define this otherwise it throws an error
+.forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+stackedAreaY = (data, {x, y, fill,...options}) => {
+  
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.areaY(data, {x, y, fill, strokeWidth: 0.6,inset: 1, fillOpacity: 0.8,...options}),
+    Plot.ruleX([new Date("1990-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+    Plot.arrow(data, {
+      x1: [new Date("1965-01-01")],
+      y1: 0.95e12,
+      x2: [new Date("1987-01-01")],
+      y2: 0.83e12,
+      bend: true
+    }),
+    Plot.text(data, {
+      x: [new Date("1877-01-01")],
+      y: 0.98e12,
+      text:[`The stock of global emissions has more than doubled since 1990`], fill: "black", stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"})
+  );
+};
+
+// BAR
+
+data2Bar = transpose(cumulative_bar_convert);
+
+chart1 = stackedAreaY(data2, {x: "year", y:"cumulative_co2_emissions_zero_filled", fill:"entity"}).plot({
+
+// Custom styling
+
+width:600,//796, // confirm sizing
+marginBottom: 40,
+marginLeft:100,
+
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+//ticks: 5,
+ticks: [new Date("1750-01-01"), new Date("1900-01-01"), new Date("1990-01-01"), new Date("2021-01-01")],
+tickPadding: 10,
+grid: false
+},
+
+y: {
+label: null,
+nice: false,
+ticks: [0, 0.8, 1.6],
+tickSize:0,
+grid: true,
+transform: (d) => d / 1e12, // transform scale 
+tickFormat: (d) => (d === 0 ? `${d}` : `${d} trillion t`) //(d) => `$${d} trillion` 
+},
+
+color: {
+legend: false,
+
+// This is a bit silly on my part. There must be a way to stack the colour range so it replicates the order I did before 
+
+  range:["#ff984e",//Africa 8
+        "#ff3a04",// Asia - chi + ind 3
+        "#ff5013",// Ch 4
+        "#ff6322",//Eur #d96855 5
+        "#f52b00",//EU27 2 
+        "#ff883f",// Ind 7
+        "#ff7630",//NA 6
+        "#ffb56b",//Ocea "#004b14" 10
+        "#ffa75c",//SA 9
+        "#e61f00"]// USA 1 
+}
+
+});
+
+chart2 = Plot.plot({
+  width: 190,
+  marginRight: 150,
+  marginBottom: 40,
+  marginLeft:0,
+  x: {label: null, tickSize: 0, ticks: null},
+  y: {label: null},
+  
+  color: {legend: false,
+  
+  range:["#ff984e",//Africa 8
+        "#ff3a04",// Asia - chi + ind 3
+        "#ff5013",// Ch 4
+        "#ff6322",//Eur #d96855 5
+        "#f52b00",//EU27 2 
+        "#ff883f",// Ind 7
+        "#ff7630",//NA 6
+        "#ffb56b",//Ocea "#004b14" 10  #e61f00
+        "#ffa75c",//SA 9
+        "#e61f00"]// USA 1 
+        
+  },
+  style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+  marks: [
+    Plot.barY(data2Bar, Plot.stackY({
+      x: "bar",
+      y: "percent",
+      fill: "entity",
+      fillOpacity: 0.8,
+      inset: 0.75,
+    })),
+    
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.labels === 1 ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "#000000",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy: 1,
+          fillOpacity: 1}))),
+      
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.entity === "Oceania" ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "#000000",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy:-6,
+          fillOpacity: 1}))),
+          
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.entity === "South America" ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "black",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy:-1.5,
+          fillOpacity: 1}))),
+
+  ]
+})
+```
+
+```{ojs}
+// credit to Tanya Shapiro - https://observablehq.com/d/25236069417628dd
+
+groupedPlots = html`
+<div>
+  <div style="display: flex">
+    <div>${[chart1]}</div>
+    <div>${[chart2]}</div>
+  </div>
+</div>`
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+\*CO₂ emissions from fossil fuels and industry only -- land use change not included. <br> **Sources:** Our World in Data; Global Carbon Project <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart2', 15)">Export as PNG</button>
+```
+# Prosperity and Doom
+
+::: {#chart3 style="width: 796px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 2.2em; margin-top: -0.2rem; color: #000000;"}
+The hockey sticks of [**prosperity**]{style="color: #3f6bee;"} and [**doom**]{style="color: #e61f00;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: 1.3rem; margin-top: -1rem; font-size: 1.4em;"}
+[Socio-economic]{style="color: #3f6bee;"} trends vs [Earth system]{style="color: #e61f00;"} trends between 1750 and 2010
+:::
+
+```{ojs}
+//https://observablehq.com/@tophtucker/facet-wrap + https://observablehq.com/@observablehq/plot-facet-wrap
+// Credit to Toph Tucker and Mike Bostock for these solutions. I mashed them together to make the Great Acceleration chart.
+
+newPlot = import("https://esm.sh/@observablehq/plot");
+// Transpose
+data3 = transpose(igbp_combined_df_convert);
+
+data3Edit = data3 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+htl.html`<div id=facetChart style="display: flex; flex-wrap: wrap; line-height: 0px;">
+  ${d3.groups(data3, (d) => d.labels)
+    .map(([facet, data]) =>
+      htl.html`<figure>
+
+        ${newPlot.plot({
+          width: 199,
+          height: 170,
+          marginBottom: 20,
+          marginLeft: 35,
+          marginTop: 24,
+          aspectRatio: 1,
+          
+          style: {fontSize: "12px", backgroundColor: "#e5e8de"},
+          
+          x: {
+          label: null,
+          nice: false,
+          ticks: [new Date("1750-01-01"), new Date("1950-01-01"), new Date("2010-01-01")],
+          domain: [new Date("1750-01-01"), new Date("2010-01-01")]
+          },
+          
+          y: {
+          nice: true,
+          ticks: 4,
+          grid: true,
+          tickSize: 0,
+          domain: d3.extent(data, (d) => d.values),
+          labelArrow: "none",
+          label: `${d3.groups(data, (d) => d.yAxisLabels).map(([yAxisLabels, data]) => yAxisLabels)}` //genuinely can't believe this worked
+          },
+          
+          color: {legend: false},
+          
+          marks: [
+          
+          // Credit Mike Bostock again -  https://observablehq.com/@observablehq/plot-area-chart-with-gradient
+          
+          () => htl.svg`<defs>
+                <linearGradient id="gradientBlue" gradientTransform="rotate(0)">
+                <stop offset="25%" stop-color="white" stop-opacity="0" />
+                <stop offset="100%" stop-color="#3f6bee" stop-opacity="0.7" />
+                </linearGradient>
+                <linearGradient id="gradientRed" gradientTransform="rotate(0)">
+                <stop offset="25%" stop-color="white" stop-opacity="0" />
+                <stop offset="100%" stop-color="#e61f00" stop-opacity="0.7" />
+                </linearGradient>
+          </defs>`,
+          
+          newPlot.ruleY(data, {
+            y: 0, 
+            stroke: "black", 
+            strokeWidth: (d) => (d.labels === "Surface Temperature" ? 0.75 : 0), // x position and clipping is different for surface temp data
+            clip: "frame"
+            }), 
+      
+          
+          newPlot.ruleX([new Date("1950-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+        
+          
+          newPlot.areaY(data, {
+          x: "year", 
+          y: "values_all_else", 
+          fill: (d) => (d.trend_type === "Socio-economic Trends" ? "url(#gradientBlue)" : "url(#gradientRed)"), //"#3f6bee" : "#e61f00"
+          clip: true,
+          curve: "natural"
+        }),
+        
+        newPlot.areaY(data, {
+          x: "year", 
+          y1: "min",
+          y2: "values_temp", 
+          fill: (d) => (d.trend_type === "Socio-economic Trends" ? "url(#gradientBlue)" : "url(#gradientRed)"),
+          clip: true,
+          curve: "natural"
+        }),
+        
+          newPlot.line(data, {
+          x: "year",
+          y: "values",
+          z: "trend_type",
+          stroke: "#FFFFFF",
+          clip: true,
+          strokeWidth:3,
+          curve: "natural"
+      }),
+      
+          newPlot.line(data, {
+          x: "year",
+          y: "values",
+          z: "trend_type",
+          stroke: (d) => (d.trend_type === "Socio-economic Trends" ? "#3f6bee" : "#e61f00"),
+          clip: true,
+          strokeWidth:1.5,
+          curve: "natural"
+      }),
+      
+      newPlot.ruleY(data, {
+            y: 0, 
+            stroke: "black", 
+            strokeWidth: (d) => (d.labels === "Surface Temperature" ? 0 : 2.2), // put a hard x axis rule for all starting at 0
+            clip: "frame"
+            }), // FIX THIS - conditional width?
+      
+      newPlot.frame({anchor: "left"}), // the frame kept getting clipped for the different facets on the x axis.
+                                       // so only left it for the left side of frame. The rule deals with the x axis
+          
+          newPlot.text([`${d3.groups(data, (d) => d.labels).map(([labels, data]) => labels)}`], 
+          {frameAnchor: "top-left",
+          dx: 2.5, 
+          dy: 4,
+          lineWidth: 5,
+          fontSize: "16.5px",
+          fontWeight: "bold",
+          fill: "black",
+          stroke: "#e5e8de"
+          })
+          ]
+
+        })}
+
+      </figure>`
+  )}
+</div>`
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** IGBP; Steffen et al. (2015) - Details of units and dataset construction given herein <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart3', 15)">Export as PNG</button>
+```
+# Hope
+
+::: {#chart4 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of [**hope**]{style="color: #572DFF;"}: solar capacity
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+World solar capacity (gigawatts) - GW installed and projected (shaded grey)
+:::
+
+```{ojs}
+
+data4 = transpose(installed_solar_PV_cap_convert);
+
+data4Edit = data4 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+lineYhope = (data, {x, y,...options}) => {
+  return newPlot.marks(
+    newPlot.ruleY([0]),
+    newPlot.rect(data, {
+      x1: new Date("2023-01-01"), 
+      y1: 0,
+      x2: new Date("2028-01-01"),
+      y2: 4000, 
+      strokeOpacity: 0.2,
+      fill: "grey",
+      fillOpacity: 0.008
+    }),
+    
+    
+    newPlot.areaY(data, {x, y, fill: "#572DFF", fillOpacity: 0.6, curve: "natural",clip: true,...options}),
+    newPlot.lineY(data, {x,y, stroke: "#572DFF", curve: "natural", clip: true,...options}),
+    
+    newPlot.arrow(data, {
+      x1: [new Date("2020-04-04")],
+      y1: 1400,
+      x2: [new Date("2022-06-07")],
+      y2: 1030,
+      bend: true
+    }),
+    
+    newPlot.text(data, {
+      x: [new Date("2012-01-01")],
+      y: 1500,
+      text:[`It took 22 years for the world to install its first terawatt of solar power capacity`], fill: "black", stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"}),
+      
+    newPlot.arrow(data, {
+      x1: [new Date("2021-01-01")],
+      y1: 3000,
+      x2: [new Date("2025-01-01")],
+      y2: 2020,
+      bend: -22.5
+    }),
+    
+    newPlot.arrow(data, {
+      x1: [new Date("2022-09-09")],
+      y1: 3500,
+      x2: [new Date("2027-01-01")],
+      y2: 3020,
+      bend: true
+    }),
+      
+      newPlot.text(data, {
+      x: [new Date("2015-01-01")],
+      y: 3500,
+      text:[`The second and third terawatts are now expected to arrive within 5 years`], fill: "black", strokeWidth: 5, stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"})
+      
+  );
+}
+
+lineYhope(data4, {x: "year", y:"solar_capacity"}).plot({
+
+// Custom styling
+height: 400,
+marginBottom: 40,
+marginLeft: 85,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+ticks: [new Date("2000-01-01"), new Date("2004-01-01"), new Date("2008-01-01"), new Date("2012-01-01"), new Date("2016-01-01"), new Date("2020-01-01"), new Date("2024-01-01"), new Date("2028-01-01")],
+tickPadding: 10
+},
+
+y: {
+label: null, 
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => (d === 0 ? `${d}` : `${d} GW`)
+},
+
+color: {
+legend: false //,
+//range: ["#572DFF"]
+}
+
+});
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Carbon Brief; Our World in Data; IRENA; Solar Power Europe <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart4', 15)">Export as PNG</button>
+```
+# Left-wing pop: cross of income
+
+::: {#chart5 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of income shares in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+Shares of national income in the US (%) - top 1% vs bottom 50%
+:::
+
+```{ojs}
+
+// Transpose
+data5 = transpose(WID_p1vp50_US_convert);
+
+
+date5Edit = data5 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineY = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    //Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z, stroke: "white", color: "white",curve: "natural", strokeWidth: 6,...options}),
+    Plot.lineY(data, {x, y, z, stroke, color, curve: "natural", strokeWidth: 4,...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, color, textAnchor: "start",fontSize:"18px",fill,dx: 10,stroke: "#e5e8de", strokeWidth: 5,...options}))
+  );
+}
+
+// This seems like a poorly written function. Leave it for now - the other crosses might have differences
+
+crossLineY(data5, {x: "year", y:"sptinc_z_us_pre_tax_national_income_top_1_percent_share_usa", z:"percentile", stroke: "percentile", text: "percentile", color: "percentile", fill: "percentile"}).plot({
+
+marginTop:5,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 65,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: 5
+},
+
+y: {
+label: null,
+percent: true,
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#3f6bee", "#e61f00"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Source:** World Inequality Database <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart5', 15)">Export as PNG</button>
+```
+# Right-wing pop narrative: deindustrialization
+
+::: {#chart6v2 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of types of work in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+US employment by economic sector - number of people (% share)
+:::
+
+```{ojs}
+
+// Transpose
+//data6v2 = transpose(shares_of_gdp_by_economic_sector_convert);
+
+data6v2 = transpose(employment_by_economic_sector_convert);
+
+
+date6v2Edit = data6v2 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineY6v2 = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z,marker: "dot", stroke: "white", color: "white",curve: "natural", strokeWidth: 3,...options}),
+    Plot.lineY(data, {x, y, z,marker: "dot", stroke, color, strokeWidth: 2,curve: "natural",...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, color, textAnchor: "start",fontSize:"18px",fill,dx: 10, stroke: "#e5e8de", strokeWidth: 5, lineWidth: 10,...options}))
+  );
+}
+
+crossLineY6v2(data6v2, {x: "year", y:"share", z:"category", stroke: "category", text: "labels", color: "category", fill: "category"}).plot({
+
+marginTop:20,
+marginBottom: 40,
+marginLeft: 50,
+marginRight: 120,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: [new Date("1840-01-01"), new Date("1900-01-01"), new Date("1950-01-01"), new Date("2015-01-01")]
+},
+
+y: {
+label: null,
+percent: true,
+nice: false,
+ticks: [0, 20, 40, 60, 80, 100],
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Our World In Data; Herrendorf et al. (2014); WDI <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart6v2', 15)">Export as PNG</button>
+```
+# Right-wing pop: global manufacturing
+
+::: {#chart7 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of global manufacturing shares
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+Share of global manufacturing value added (%)
+:::
+
+```{ojs}
+
+// Transpose
+data7 = transpose(glob_man_val_add_convert);
+
+
+date7Edit = data7 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+multicrossLineY = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z, stroke: "white", color: "white", strokeWidth: 6,curve: "natural",...options}),
+    Plot.lineY(data, {x, y, z, stroke, color, strokeWidth: 4,curve: "natural",...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, color, textAnchor: "start",fontSize:"18px",fill,dx: 10, stroke: "#e5e8de", strokeWidth: 5, lineWidth: 5,...options}))
+  );
+}
+
+multicrossLineY(data7, {x: "year", y:"shares", z:"country_name", stroke: "country_name", text: "labels", color: "country_name", fill: "country_name"}).plot({
+
+marginTop:0,
+marginBottom: 40,
+marginLeft: 50,
+marginRight: 70,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: false,
+tickPadding: 10,
+ticks: [new Date("2004-01-01"), new Date("2008-01-01"), new Date("2012-01-01"), new Date("2016-01-01"), new Date("2020-01-01")]
+},
+
+y: {
+label: null,
+percent: true,
+nice: true,
+ticks: [0, 10, 20, 30],
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00", "#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Source:** World Bank <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart7', 15)">Export as PNG</button>
+```
+# Cross of Tax Burdens
+
+::: {#chart8 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of tax burdens in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+US federal corporate vs payroll taxes as a share of GDP (%)
+:::
+
+```{ojs}
+
+// Transpose
+data8 = transpose(tax_burden_data_convert);
+
+
+date8Edit = data8 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineYtax = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z, stroke: "white", color: "white", strokeWidth: 6,curve: "natural",...options}),
+    Plot.lineY(data, {x, y, z, stroke, color, strokeWidth: 4,curve: "natural",...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, stroke: "#e5e8de", color, textAnchor: "start",fontSize:"18px",fill,dx: 10, strokeWidth: 5, lineWidth: 5,...options}))
+  );
+}
+
+crossLineYtax(data8, {x: "year", y:"values", z:"categories", stroke: "categories", text: "labels", color: "categories", fill: "categories"}).plot({
+
+marginTop:20,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 35,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: [new Date("1950-01-01"), new Date("1960-01-01"), new Date("1970-01-01"), new Date("1980-01-01"), new Date("1990-01-01"), new Date("2000-01-01"), new Date("2010-01-01"), new Date("2020-01-01")]
+},
+
+y: {
+label: null,
+nice: true,
+ticks: [0, 1, 2, 3, 4, 5, 6, 7],
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Office of Management and Budget; Zucman and Saez (2019) <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart8', 15)">Export as PNG</button>
+```
+# Additional chart: GDP
+
+::: {#chart9 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of global power
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+Share of world GDP (%) - PPP constant 2017 international \$
+:::
+
+```{ojs}
+
+// Transpose
+data9 = transpose(df_chn_usa_convert);
+
+
+date9Edit = data9 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineYgdp = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return newPlot.marks(
+    newPlot.ruleY([0]),
+    newPlot.lineY(data, {x, y, z, stroke: "white", color: "white", strokeWidth: 6,curve: "natural",...options}),
+    newPlot.lineY(data, {x, y, z, stroke, color, strokeWidth: 4,curve: "natural",...options}),
+    newPlot.text(data, Plot.selectLast({x, y, z, text, strokeWidth: 5, stroke: "#e5e8de", color, textAnchor: "start",fontSize:"18px",lineWidth: 5, dx: 15, fill,...options})),
+    newPlot.ruleX([new Date("2001-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+    newPlot.axisX({
+    fontWeight: (d) => (d.year === new Date("2001-01-01") ? "bold" : "normal"), // ...this did not work
+    ticks: [new Date("1990-01-01"), new Date("1995-01-01"), new Date("2001-01-01"), new Date("2005-01-01"), new Date("2010-01-01"), new Date("2015-01-01"), new Date("2020-01-01")]
+    }),
+    newPlot.arrow(data9, {
+      x1: [new Date("1998-01-01")],
+      y1: 0.09,
+      x2: [new Date("2000-09-09")],
+      y2: 0.075,
+      bend: true
+    }),
+    newPlot.text(data9, {
+      x: [new Date("1993-01-01")],
+      y: 0.095,
+      text:[`China's accession to the WTO`], fill: "black", stroke: "#e5e8de", textAnchor: "start", strokeWidth: 5, lineWidth: 9, fontSize:"15px"})
+  );
+}
+
+crossLineYgdp(data9, {x: "year", y:"share", z:"country_name", stroke: "country_name", text: "country_name", color: "country_name", fill: "country_name"}).plot({
+
+height: 400,
+marginTop:20,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 35,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+},
+
+y: {
+label: null,
+percent: true,
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Source:** World Bank <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart9', 15)">Export as PNG</button>
+```
