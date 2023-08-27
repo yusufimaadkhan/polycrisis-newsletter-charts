@@ -1,0 +1,503 @@
+---
+title: "Hockey sticks and crosses"
+author: "Yusuf Imaad Khan"
+format: html
+editor: source
+backgroundcolor: "#e5e8de"
+execute:
+  echo: false
+  warning: false
+  message: false
+  #cache: true # be careful with this one
+code-tools: true
+toc: true
+number-sections: true
+toc-depth: 1
+number-depth: 1
+self-contained: true # deprecated in later version 
+quarto:
+  dependencies:
+    - html2canvas@^1.3.2
+---
+
+```{r}
+
+# Load packages
+
+pacman::p_load(tidyverse, readr, readxl, janitor, here)
+
+# Get handy functions
+
+source(here("newsletter-charts", "functions", "handy-functions.R"))
+
+# Import all CSVs from folder
+
+csv_data <- import_csvs_from_folder("outputs")
+
+```
+
+```{=html}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js"></script>
+
+<!-- use relative file path -->
+
+<script src="../functions/exportAsPNGv2.js"></script>
+```
+
+```{r}
+#| cache: false
+
+# convert to observable ----
+
+
+ojs_define(world_gdp_2_millenia_convert = world_gdp_2_millenia)
+
+# these will be stuck together and the bar will be aligned inset
+ojs_define(cumulative_co2_emissions_region_convert = cumulative_co2_emissions_region)
+
+ojs_define(cumulative_bar_convert = cumulative_bar)
+
+
+# 
+ojs_define(installed_solar_PV_cap_convert = installed_solar_PV_cap)
+
+```
+
+# Establishment narrative: prosperity
+
+::: {#chart1 style="width: 650px; background-color: #e5e8de;"}
+
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of global [**prosperity**]{style="color: #3f6bee;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+World GDP over the last two millenia\*
+:::
+
+```{ojs}
+
+// How to read chart code 
+// - Outside of fences/chunks -> markdown that deals with div size, titles, captions, and background colours
+// - Inside - transpose data - parse time variable - write a function in plot (so you can reuse later) - fill in with the specifics
+// - Final step for chart after function - style it and sort ticks/grids
+
+newPlot = import("https://esm.sh/@observablehq/plot");
+
+// Transpose
+data1 = transpose(world_gdp_2_millenia_convert);
+
+//Parse time
+parseTime = d3.utcParse("%Y");
+
+/*
+  some common formatting parsers....
+  '%m/%d/%Y'        01/28/1986
+  '%d-%b-%y'        28-Jan-86
+  '%Y %b'           1986 Jan
+  '%Y-%m-%d'        1986-01-28
+  '%B %d'           January 28
+  '%d %b'           28 Jan
+  '%H:%M'           11:39
+  '%H:%M %p'        11:39 AM
+  '%d/%m/%Y %H:%M'  28/01/2016 11:39
+*/
+
+// Plot function - start with rough function and then add custom styling
+
+lineY = (data, {color, fillOpacity = 0.1, ...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, Plot.windowY({stroke: color,strokeWidth: 1.5,...options}))
+  );
+}
+
+lineY(data1, {x: "Year", y:"Values" , color: "#3f6bee", marker: "dot", k:1}).plot({
+
+
+
+// Custom styling
+
+marginBottom: 40,
+marginLeft: 105,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: false,
+ticks: [1, 500, 1000, 1500, 2015],
+tickPadding: 10,
+tickFormat: (d) => d,
+},
+
+y: {
+label: null, 
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+transform: (d) => d / 1e12, // transform scale 
+tickFormat: (d) => (d === 0 ? `$${d}` : `$${d} trillion`), 
+},
+
+color: {
+legend: false,
+range: ["#3f6bee"]
+}
+
+});
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570; background-color: #e5e8de;"}
+\*Inflation adjusted and international-\$ (2011 prices) <br> **Sources:** Our World In Data based on World Bank & Maddison (2017) <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart1', 15)">Export as PNG</button>
+```
+# Anthropocene narrative: doom
+
+::: {#chart2 style="width: 750px; background-color: #e5e8de;"}
+
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of [**doom**]{style="color: #e61f00;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: -0.5rem;"}
+Cumulative carbon dioxide (CO₂) emissions\* by region. Total shares shown inset.
+:::
+
+```{ojs}
+
+import {voronoiCentroids} from "@fil/plot-voronoi-labels"; // Credit to Fil for implementing voronoi in plot
+
+// Transpose
+data2 = transpose(cumulative_co2_emissions_region_convert);
+
+date2edit = data2 // have to define this otherwise it throws an error
+.forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+
+// Plot function - start with rough function and then add custom styling
+
+stackedAreaY = (data, {x, y, fill,...options}) => {
+  
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.areaY(data, {x, y, fill, strokeWidth: 0.6,inset: 1, fillOpacity: 0.8,...options}),
+    Plot.ruleX([new Date("1990-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+    Plot.arrow(data, {
+      x1: [new Date("1965-01-01")],
+      y1: 0.95e12,
+      x2: [new Date("1987-01-01")],
+      y2: 0.83e12,
+      bend: true
+    }),
+    Plot.text(data, {
+      x: [new Date("1877-01-01")],
+      y: 0.98e12,
+      text:[`The stock of global emissions has more than doubled since 1990`], fill: "black", stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"})
+  );
+};
+
+// BAR
+
+data2Bar = transpose(cumulative_bar_convert);
+
+chart1 = stackedAreaY(data2, {x: "year", y:"cumulative_co2_emissions_zero_filled", fill:"entity"}).plot({
+
+// Custom styling
+
+width:600,//796, // confirm sizing
+marginBottom: 40,
+marginLeft:100,
+
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+ticks: [new Date("1750-01-01"), new Date("1900-01-01"), new Date("1990-01-01"), new Date("2021-01-01")],
+tickPadding: 10,
+grid: false
+},
+
+y: {
+label: null,
+nice: false,
+ticks: [0, 0.8, 1.6],
+tickSize:0,
+grid: true,
+transform: (d) => d / 1e12, // transform scale 
+tickFormat: (d) => (d === 0 ? `${d}` : `${d} trillion t`) //(d) => `$${d} trillion` 
+},
+
+color: {
+legend: false,
+
+// This is a bit silly on my part. There must be a way to stack the colour range so it replicates the order I did before 
+
+  range:["#ff984e",//Africa 8
+        "#ff3a04",// Asia - chi + ind 3
+        "#ff5013",// Ch 4
+        "#ff6322",//Eur #d96855 5
+        "#f52b00",//EU27 2 
+        "#ff883f",// Ind 7
+        "#ff7630",//NA 6
+        "#ffb56b",//Ocea "#004b14" 10
+        "#ffa75c",//SA 9
+        "#e61f00"]// USA 1 
+}
+
+});
+
+chart2 = Plot.plot({
+  width: 190,
+  marginRight: 150,
+  marginBottom: 40,
+  marginLeft:0,
+  x: {label: null, tickSize: 0, ticks: null},
+  y: {label: null},
+  
+  color: {legend: false,
+  
+  range:["#ff984e",//Africa 8
+        "#ff3a04",// Asia - chi + ind 3
+        "#ff5013",// Ch 4
+        "#ff6322",//Eur #d96855 5
+        "#f52b00",//EU27 2 
+        "#ff883f",// Ind 7
+        "#ff7630",//NA 6
+        "#ffb56b",//Ocea "#004b14" 10  #e61f00
+        "#ffa75c",//SA 9
+        "#e61f00"]// USA 1 
+        
+  },
+  style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+  marks: [
+    Plot.barY(data2Bar, Plot.stackY({
+      x: "bar",
+      y: "percent",
+      fill: "entity",
+      fillOpacity: 0.8,
+      inset: 0.75,
+    })),
+    
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.labels === 1 ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "#000000",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy: 1,
+          fillOpacity: 1}))),
+      
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.entity === "Oceania" ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "#000000",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy:-6,
+          fillOpacity: 1}))),
+          
+    Plot.text(data2Bar,
+    voronoiCentroids(
+      Plot.stackY(
+      {
+          x: "bar", 
+          y: "percent",
+          text: (d) => (d.entity === "South America" ? `${d["entity"]} ${(d["percent"] * 100).toFixed(1)}%` : null),
+          lineWidth: 15,
+          fill: "black",
+          stroke: "#e5e8de",
+          textAnchor:"start", 
+          fontSize:"12px",
+          dx: 5,
+          dy:-1.5,
+          fillOpacity: 1}))),
+
+  ]
+})
+```
+
+```{ojs}
+// credit to Tanya Shapiro - https://observablehq.com/d/25236069417628dd
+
+groupedPlots = html`
+<div>
+  <div style="display: flex">
+    <div>${[chart1]}</div>
+    <div>${[chart2]}</div>
+  </div>
+</div>`
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+\*CO₂ emissions from fossil fuels and industry only -- land use change not included. <br> **Sources:** Our World in Data; Global Carbon Project <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart2', 15)">Export as PNG</button>
+```
+
+
+# Hope
+
+::: {#chart4 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The hockey stick of [**hope**]{style="color: #572DFF;"}: solar capacity
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+World solar capacity (gigawatts) - GW installed and projected (shaded grey)
+:::
+
+```{ojs}
+
+data4 = transpose(installed_solar_PV_cap_convert);
+
+data4Edit = data4 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+lineYhope = (data, {x, y,...options}) => {
+  return newPlot.marks(
+    newPlot.ruleY([0]),
+    newPlot.rect(data, {
+      x1: new Date("2023-01-01"), 
+      y1: 0,
+      x2: new Date("2028-01-01"),
+      y2: 4000, 
+      strokeOpacity: 0.2,
+      fill: "grey",
+      fillOpacity: 0.008
+    }),
+    
+    
+    newPlot.areaY(data, {x, y, fill: "#572DFF", fillOpacity: 0.6, curve: "natural",clip: true,...options}),
+    newPlot.lineY(data, {x,y, stroke: "#572DFF", curve: "natural", clip: true,...options}),
+    
+    newPlot.arrow(data, {
+      x1: [new Date("2020-04-04")],
+      y1: 1400,
+      x2: [new Date("2022-06-07")],
+      y2: 1030,
+      bend: true
+    }),
+    
+    newPlot.text(data, {
+      x: [new Date("2012-01-01")],
+      y: 1500,
+      text:[`It took 22 years for the world to install its first terawatt of solar power capacity`], fill: "black", stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"}),
+      
+    newPlot.arrow(data, {
+      x1: [new Date("2021-01-01")],
+      y1: 3000,
+      x2: [new Date("2025-01-01")],
+      y2: 2020,
+      bend: -22.5
+    }),
+    
+    newPlot.arrow(data, {
+      x1: [new Date("2022-09-09")],
+      y1: 3500,
+      x2: [new Date("2027-01-01")],
+      y2: 3020,
+      bend: true
+    }),
+      
+      newPlot.text(data, {
+      x: [new Date("2015-01-01")],
+      y: 3500,
+      text:[`The second and third terawatts are now expected to arrive within 5 years`], fill: "black", strokeWidth: 5, stroke: "#e5e8de", textAnchor: "start", lineWidth: 10, fontSize:"18px"})
+      
+  );
+}
+
+lineYhope(data4, {x: "year", y:"solar_capacity"}).plot({
+
+// Custom styling
+height: 400,
+marginBottom: 40,
+marginLeft: 85,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+ticks: [new Date("2000-01-01"), new Date("2004-01-01"), new Date("2008-01-01"), new Date("2012-01-01"), new Date("2016-01-01"), new Date("2020-01-01"), new Date("2024-01-01"), new Date("2028-01-01")],
+tickPadding: 10
+},
+
+y: {
+label: null, 
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => (d === 0 ? `${d}` : `${d} GW`)
+},
+
+color: {
+legend: false
+}
+
+});
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Carbon Brief; Our World in Data; IRENA; Solar Power Europe <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart4', 15)">Export as PNG</button>
+```

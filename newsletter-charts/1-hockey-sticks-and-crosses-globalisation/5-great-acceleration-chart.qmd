@@ -1,0 +1,224 @@
+---
+title: "Hockey sticks and crosses"
+author: "Yusuf Imaad Khan"
+format: html
+editor: source
+backgroundcolor: "#e5e8de"
+execute:
+  echo: false
+  warning: false
+  message: false
+  #cache: true # be careful with this one
+code-tools: true
+toc: true
+number-sections: true
+toc-depth: 1
+number-depth: 1
+self-contained: true # deprecated in later version 
+quarto:
+  dependencies:
+    - html2canvas@^1.3.2
+---
+
+```{r}
+
+# Load packages
+
+pacman::p_load(tidyverse, readr, readxl, janitor, here)
+
+# Get handy functions
+
+source(here("newsletter-charts", "functions", "handy-functions.R"))
+
+# Import all CSVs from folder
+
+csv_data <- import_csvs_from_folder("outputs")
+
+```
+
+```{=html}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js"></script>
+
+<!-- use relative file path -->
+
+<script src="../functions/exportAsPNGv2.js"></script>
+```
+
+```{r}
+#| cache: false
+
+ 
+ojs_define(igbp_combined_df_convert = igbp_combined_df)
+
+```
+
+# Prosperity and Doom
+
+::: {#chart3 style="width: 796px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 2.2em; margin-top: -0.2rem; color: #000000;"}
+The hockey sticks of [**prosperity**]{style="color: #3f6bee;"} and [**doom**]{style="color: #e61f00;"}
+:::
+
+::: {style="color: #5a6570; margin-bottom: 1.3rem; margin-top: -1rem; font-size: 1.4em;"}
+[Socio-economic]{style="color: #3f6bee;"} trends vs [Earth system]{style="color: #e61f00;"} trends between 1750 and 2010
+:::
+
+```{ojs}
+//https://observablehq.com/@tophtucker/facet-wrap + https://observablehq.com/@observablehq/plot-facet-wrap
+// Credit to Toph Tucker and Mike Bostock for these solutions. I mashed them together to make the Great Acceleration chart.
+
+newPlot = import("https://esm.sh/@observablehq/plot");
+
+//Parse time
+parseTime = d3.utcParse("%Y");
+
+// Transpose
+data3 = transpose(igbp_combined_df_convert);
+
+data3Edit = data3 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+htl.html`<div id=facetChart style="display: flex; flex-wrap: wrap; line-height: 0px;">
+  ${d3.groups(data3, (d) => d.labels)
+    .map(([facet, data]) =>
+      htl.html`<figure>
+
+        ${newPlot.plot({
+          width: 199,
+          height: 170,
+          marginBottom: 20,
+          marginLeft: 35,
+          marginTop: 24,
+          aspectRatio: 1,
+          
+          style: {fontSize: "12px", backgroundColor: "#e5e8de"},
+          
+          x: {
+          label: null,
+          nice: false,
+          ticks: [new Date("1750-01-01"), new Date("1950-01-01"), new Date("2010-01-01")],
+          domain: [new Date("1750-01-01"), new Date("2010-01-01")]
+          },
+          
+          y: {
+          nice: true,
+          ticks: 4,
+          grid: true,
+          tickSize: 0,
+          domain: d3.extent(data, (d) => d.values),
+          labelArrow: "none",
+          label: `${d3.groups(data, (d) => d.yAxisLabels).map(([yAxisLabels, data]) => yAxisLabels)}` //genuinely can't believe this worked
+          },
+          
+          color: {legend: false},
+          
+          marks: [
+          
+          // Credit Mike Bostock again -  https://observablehq.com/@observablehq/plot-area-chart-with-gradient
+          
+          () => htl.svg`<defs>
+                <linearGradient id="gradientBlue" gradientTransform="rotate(0)">
+                <stop offset="25%" stop-color="white" stop-opacity="0" />
+                <stop offset="100%" stop-color="#3f6bee" stop-opacity="0.7" />
+                </linearGradient>
+                <linearGradient id="gradientRed" gradientTransform="rotate(0)">
+                <stop offset="25%" stop-color="white" stop-opacity="0" />
+                <stop offset="100%" stop-color="#e61f00" stop-opacity="0.7" />
+                </linearGradient>
+          </defs>`,
+          
+          newPlot.ruleY(data, {
+            y: 0, 
+            stroke: "black", 
+            strokeWidth: (d) => (d.labels === "Surface Temperature" ? 0.5 : 0), // x position and clipping is different for surface temp data
+            clip: "frame"
+            }), 
+      
+          
+          newPlot.ruleX([new Date("1950-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+        
+          
+          newPlot.areaY(data, {
+          x: "year", 
+          y: "values_all_else", 
+          fill: (d) => (d.trend_type === "Socio-economic Trends" ? "url(#gradientBlue)" : "url(#gradientRed)"), //"#3f6bee" : "#e61f00"
+          clip: true,
+          curve: "natural"
+        }),
+        
+        newPlot.areaY(data, {
+          x: "year", 
+          y1: "min",
+          y2: "values_temp", 
+          fill: (d) => (d.trend_type === "Socio-economic Trends" ? "url(#gradientBlue)" : "url(#gradientRed)"),
+          clip: true,
+          curve: "natural"
+        }),
+        
+          newPlot.line(data, {
+          x: "year",
+          y: "values",
+          z: "trend_type",
+          stroke: "#FFFFFF",
+          clip: true,
+          strokeWidth:3,
+          curve: "natural"
+      }),
+      
+          newPlot.line(data, {
+          x: "year",
+          y: "values",
+          z: "trend_type",
+          stroke: (d) => (d.trend_type === "Socio-economic Trends" ? "#3f6bee" : "#e61f00"),
+          clip: true,
+          strokeWidth:1.5,
+          curve: "natural"
+      }),
+      
+      newPlot.ruleY(data, {
+            y: 0, 
+            stroke: "black", 
+            strokeWidth: (d) => (d.labels === "Surface Temperature" ? 0 : 2.1), // put a hard x axis rule for all starting at 0
+            clip: "frame"
+            }), // FIX THIS - conditional width?
+      
+      newPlot.frame({anchor: "left"}), // the frame kept getting clipped for the different facets on the x axis.
+                                       // so only left it for the left side of frame. The rule deals with the x axis
+          
+          newPlot.text([`${d3.groups(data, (d) => d.labels).map(([labels, data]) => labels)}`], 
+          {frameAnchor: "top-left",
+          dx: 2.5, 
+          dy: 4,
+          lineWidth: 5,
+          fontSize: "16.5px",
+          fontWeight: "bold",
+          fill: "black",
+          stroke: "#e5e8de"
+          })
+          ]
+
+        })}
+
+      </figure>`
+  )}
+</div>`
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** IGBP; Steffen et al. (2015) - Details of units and dataset construction given herein <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart3', 15)">Export as PNG</button>
+```

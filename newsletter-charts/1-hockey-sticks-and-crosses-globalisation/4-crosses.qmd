@@ -1,0 +1,427 @@
+---
+title: "Hockey sticks and crosses"
+author: "Yusuf Imaad Khan"
+format: html
+editor: source
+backgroundcolor: "#e5e8de"
+execute:
+  echo: false
+  warning: false
+  message: false
+  #cache: true # be careful with this one
+code-tools: true
+toc: true
+number-sections: true
+toc-depth: 1
+number-depth: 1
+self-contained: true # deprecated in later version 
+quarto:
+  dependencies:
+    - html2canvas@^1.3.2
+---
+
+```{r}
+
+# Load packages
+
+pacman::p_load(tidyverse, readr, readxl, janitor, here)
+
+# Get handy functions
+
+source(here("newsletter-charts", "functions", "handy-functions.R"))
+
+# Import all CSVs from folder
+
+csv_data <- import_csvs_from_folder("outputs")
+
+```
+
+```{=html}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js"></script>
+
+<!-- use relative file path -->
+
+<script src="../functions/exportAsPNGv2.js"></script>
+```
+
+```{r}
+#| cache: false
+
+# convert to observable ----
+
+# 
+ojs_define(WID_p1vp50_US_convert = WID_p1vp50_US)
+
+#
+ojs_define(employment_by_economic_sector_convert = employment_by_economic_sector)
+
+# 
+ojs_define(tax_burden_data_convert = tax_burden_data)
+
+# 
+ojs_define(df_chn_usa_convert = df_chn_usa)
+
+```
+
+
+# Left-wing pop: cross of income
+
+::: {#chart5 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of income shares in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+Shares of national income in the US (%) - top 1% vs bottom 50%
+:::
+
+```{ojs}
+
+newPlot = import("https://esm.sh/@observablehq/plot");
+
+//Parse time
+parseTime = d3.utcParse("%Y");
+
+// Transpose
+data5 = transpose(WID_p1vp50_US_convert);
+
+
+date5Edit = data5 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineY = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    //Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z, stroke: "white", color: "white",curve: "natural", strokeWidth: 6,...options}),
+    Plot.lineY(data, {x, y, z, stroke, color, curve: "natural", strokeWidth: 4,...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, color, textAnchor: "start",fontSize:"18px",fill,dx: 10,stroke: "#e5e8de", strokeWidth: 5,...options}))
+  );
+}
+
+// This seems like a poorly written function. Leave it for now - the other crosses might have differences
+
+crossLineY(data5, {x: "year", y:"sptinc_z_us_pre_tax_national_income_top_1_percent_share_usa", z:"percentile", stroke: "percentile", text: "percentile", color: "percentile", fill: "percentile"}).plot({
+
+marginTop:5,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 65,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: 5
+},
+
+y: {
+label: null,
+percent: true,
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#3f6bee", "#e61f00"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Source:** World Inequality Database <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart5', 15)">Export as PNG</button>
+```
+# Right-wing pop narrative: deindustrialization
+
+::: {#chart6 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of types of work in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+US employment by economic sector - number of people (% share)
+:::
+
+```{ojs}
+
+// Transpose
+//data6v2 = transpose(shares_of_gdp_by_economic_sector_convert);
+
+data6v2 = transpose(employment_by_economic_sector_convert);
+
+
+date6v2Edit = data6v2 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineY6v2 = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z,marker: "dot", stroke: "white", color: "white",curve: "natural", strokeWidth: 3,...options}),
+    Plot.lineY(data, {x, y, z,marker: "dot", stroke, color, strokeWidth: 2,curve: "natural",...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, color, textAnchor: "start",fontSize:"18px",fill,dx: 10, stroke: "#e5e8de", strokeWidth: 5, lineWidth: 10,...options}))
+  );
+}
+
+crossLineY6v2(data6v2, {x: "year", y:"share", z:"category", stroke: "category", text: "labels", color: "category", fill: "category"}).plot({
+
+marginTop:20,
+marginBottom: 40,
+marginLeft: 50,
+marginRight: 120,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: [new Date("1840-01-01"), new Date("1900-01-01"), new Date("1950-01-01"), new Date("2015-01-01")]
+},
+
+y: {
+label: null,
+percent: true,
+nice: false,
+ticks: [0, 20, 40, 60, 80, 100],
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Our World In Data; Herrendorf et al. (2014); WDI <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart6', 15)">Export as PNG</button>
+```
+
+# Cross of Tax Burdens
+
+::: {#chart7 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of tax burdens in the US
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+US federal corporate vs payroll taxes as a share of GDP (%)
+:::
+
+```{ojs}
+
+// Transpose
+data8 = transpose(tax_burden_data_convert);
+
+
+date8Edit = data8 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineYtax = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return Plot.marks(
+    Plot.ruleY([0]),
+    Plot.lineY(data, {x, y, z, stroke: "white", color: "white", strokeWidth: 6,curve: "natural",...options}),
+    Plot.lineY(data, {x, y, z, stroke, color, strokeWidth: 4,curve: "natural",...options}),
+    Plot.text(data, Plot.selectLast({x, y, z, text, stroke: "#e5e8de", color, textAnchor: "start",fontSize:"18px",fill,dx: 10, strokeWidth: 5, lineWidth: 5,...options}))
+  );
+}
+
+crossLineYtax(data8, {x: "year", y:"values", z:"categories", stroke: "categories", text: "labels", color: "categories", fill: "categories"}).plot({
+
+marginTop:20,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 35,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+ticks: [new Date("1950-01-01"), new Date("1960-01-01"), new Date("1970-01-01"), new Date("1980-01-01"), new Date("1990-01-01"), new Date("2000-01-01"), new Date("2010-01-01"), new Date("2020-01-01")]
+},
+
+y: {
+label: null,
+nice: true,
+ticks: [0, 1, 2, 3, 4, 5, 6, 7],
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Sources:** Office of Management and Budget; Zucman and Saez (2019) <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart7', 15)">Export as PNG</button>
+```
+# Additional chart: GDP
+
+::: {#chart8 style="width: 650px; background-color: #e5e8de;"}
+```{=html}
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1" style="display: block; height: 100%; width: 100%; margin-top: auto; margin-left: auto"><rect x="0" y="0" width="10px" height="3px" style="fill:#000000;"/></svg>
+```
+::: {style="font-size: 1.3em; margin-top: -1rem; color: #000000;"}
+### The cross of global power
+:::
+
+::: {style="color: #5a6570; margin-bottom: -1rem;"}
+Share of world GDP (%) - PPP constant 2017 international \$
+:::
+
+```{ojs}
+
+// Transpose
+data9 = transpose(df_chn_usa_convert);
+
+
+date9Edit = data9 // have to define this otherwise it throws an error
+  .forEach((d) => {
+  d.year = parseTime(d.year);
+});
+
+// Plot function - start with rough function and then add custom styling
+
+crossLineYgdp = (data, {x, y, z, text, stroke, color, fill,...options}) => {
+  return newPlot.marks(
+    newPlot.ruleY([0]),
+    newPlot.lineY(data, {x, y, z, stroke: "white", color: "white", strokeWidth: 6,curve: "natural",...options}),
+    newPlot.lineY(data, {x, y, z, stroke, color, strokeWidth: 4,curve: "natural",...options}),
+    newPlot.text(data, Plot.selectLast({x, y, z, text, strokeWidth: 5, stroke: "#e5e8de", color, textAnchor: "start",fontSize:"18px",lineWidth: 5, dx: 15, fill,...options})),
+    newPlot.ruleX([new Date("2001-01-01")], {stroke: "black", strokeDasharray: "5,3", strokeOpacity: 0.8}),
+    newPlot.axisX({
+    fontWeight: (d) => (d.year === new Date("2001-01-01") ? "bold" : "normal"), // ...this did not work
+    ticks: [new Date("1990-01-01"), new Date("1995-01-01"), new Date("2001-01-01"), new Date("2005-01-01"), new Date("2010-01-01"), new Date("2015-01-01"), new Date("2020-01-01")]
+    }),
+    newPlot.arrow(data9, {
+      x1: [new Date("1998-01-01")],
+      y1: 0.09,
+      x2: [new Date("2000-09-09")],
+      y2: 0.075,
+      bend: true
+    }),
+    newPlot.text(data9, {
+      x: [new Date("1993-01-01")],
+      y: 0.095,
+      text:[`China's accession to the WTO`], fill: "black", stroke: "#e5e8de", textAnchor: "start", strokeWidth: 5, lineWidth: 9, fontSize:"15px"})
+  );
+}
+
+crossLineYgdp(data9, {x: "year", y:"share", z:"country_name", stroke: "country_name", text: "country_name", color: "country_name", fill: "country_name"}).plot({
+
+height: 400,
+marginTop:20,
+marginBottom: 40,
+marginLeft: 45,
+marginRight: 35,
+
+style: {fontSize: "18px", backgroundColor: "#e5e8de"},
+
+x: {
+label: null,
+nice: true,
+tickPadding: 10,
+},
+
+y: {
+label: null,
+percent: true,
+nice: true,
+ticks: 5,
+tickSize:0,
+grid: true,
+tickFormat: (d) => `${d}%`, 
+},
+
+color: {
+legend: false,
+range: ["#e61f00","#3f6bee"]
+}
+
+})
+
+
+```
+
+::: {style="font-size: 13px; color: #5a6570;"}
+**Source:** World Bank <br> **Graphic:** Yusuf Imaad Khan / @yusuf_i_k
+:::
+
+::: {style="margin-top: -45px; margin-right: 10px;"}
+![](../polycrisis-black.svg){height="25" fig-align="right"}
+:::
+:::
+
+```{=html}
+<button id="downloadButton" onclick="exportAsPNGv2('chart8', 15)">Export as PNG</button>
+```
